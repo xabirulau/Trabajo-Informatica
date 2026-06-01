@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Explore the Web</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --ink: #f0ece4;
+      --accent: #e8c14a;
+      --muted: #5a5548;
+      --card-bg: #161612;
+      --hover-line: #e8c14a;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'DM Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 80px;
+      overflow-x: hidden;
+    }
+
+    /* Subtle grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 64px;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 0.8s ease both;
+    }
+
+    header .eyebrow {
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.8rem, 7vw, 5.5rem);
+      font-weight: 900;
+      line-height: 1.05;
+      color: var(--ink);
+    }
+
+    header h1 span {
+      color: var(--accent);
+    }
+
+    header p {
+      margin-top: 20px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 48px;
+      position: relative;
+      z-index: 1;
+      animation: fadeUp 0.8s 0.2s ease both;
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--muted);
+      color: var(--muted);
+      padding: 6px 18px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 2px;
+    }
+    .filter-btn:hover, .filter-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(232,193,74,0.06);
+    }
+
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 2px;
+      width: 100%;
+      max-width: 1000px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .card {
+      background: var(--card-bg);
+      padding: 32px 28px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.25s, background 0.25s;
+      animation: fadeUp 0.6s ease both;
+      cursor: pointer;
+    }
+
+    .card:nth-child(1) { animation-delay: 0.15s; }
+    .card:nth-child(2) { animation-delay: 0.25s; }
+    .card:nth-child(3) { animation-delay: 0.35s; }
+    .card:nth-child(4) { animation-delay: 0.45s; }
+    .card:nth-child(5) { animation-delay: 0.55s; }
+    .card:nth-child(6) { animation-delay: 0.65s; }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 0; height: 2px;
+      background: var(--accent);
+      transition: width 0.35s ease;
+    }
+
+    .card:hover { background: #1a1a14; transform: translateY(-2px); }
+    .card:hover::after { width: 100%; }
+
+    .card-tag {
+      font-size: 0.62rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    .card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      line-height: 1.25;
+    }
+
+    .card p {
+      font-size: 0.76rem;
+      line-height: 1.7;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .card a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--muted);
+      padding-bottom: 2px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .card a:hover { color: var(--accent); border-color: var(--accent); }
+
+    .card a .arrow {
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    .card a:hover .arrow { transform: translateX(4px); }
+
+    /* ── Tooltip ── */
+    .card a::before {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #0d0d0d;
+      font-size: 0.65rem;
+      padding: 4px 10px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      letter-spacing: 0.08em;
+    }
+    .card a:hover::before { opacity: 1; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--accent);
+      color: #0d0d0d;
+      padding: 10px 24px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      border-radius: 2px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 100;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Search ── */
+    .search-wrap {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 32px;
+      animation: fadeUp 0.8s 0.1s ease both;
+    }
+
+    #search {
+      background: var(--card-bg);
+      border: 1px solid var(--muted);
+      color: var(--ink);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      padding: 10px 20px;
+      width: 280px;
+      outline: none;
+      border-radius: 2px;
+      transition: border-color 0.2s;
+    }
+    #search:focus { border-color: var(--accent); }
+    #search::placeholder { color: var(--muted); }
+
+    /* ── Counter ── */
+    .counter {
+      text-align: center;
+      font-size: 0.68rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-top: 40px;
+      text-transform: uppercase;
+      position: relative;
+      z-index: 1;
+    }
+    .counter span { color: var(--accent); }
+
+    /* hidden card */
+    .card.hidden { display: none; }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="eyebrow">— A curated directory —</div>
+    <h1>Explore the <span>Web</span></h1>
+    <p>Hover, click, filter. A small atlas of useful corners of the internet.</p>
+  </header>
+
+  <div class="search-wrap">
+    <input id="search" type="text" placeholder="Search links…" oninput="filterCards()" autocomplete="off"/>
+  </div>
+
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+    <button class="filter-btn" onclick="setFilter('learn', this)">Learn</button>
+    <button class="filter-btn" onclick="setFilter('create', this)">Create</button>
+    <button class="filter-btn" onclick="setFilter('explore', this)">Explore</button>
+  </div>
+
+  <div class="grid" id="grid">
+
+    <div class="card" data-cat="learn">
+      <div class="card-tag">Learn</div>
+      <h2>MDN Web Docs</h2>
+      <p>The definitive reference for web developers. HTML, CSS, and JavaScript, documented with care.</p>
+      <a href="https://developer.mozilla.org" target="_blank" data-tip="Open MDN" onclick="notify('Opening MDN Web Docs…')">
+        Visit <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="card" data-cat="learn">
+      <div class="card-tag">Learn</div>
+      <h2>Wikipedia</h2>
+      <p>The free encyclopedia anyone can edit. A rabbit hole that never ends — in the best way.</p>
+      <a href="https://wikipedia.org" target="_blank" data-tip="Open Wikipedia" onclick="notify('Opening Wikipedia…')">
+        Visit <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="card" data-cat="create">
+      <div class="card-tag">Create</div>
+      <h2>CodePen</h2>
+      <p>A social development environment for front‑end designers and developers. Build and share instantly.</p>
+      <a href="https://codepen.io" target="_blank" data-tip="Open CodePen" onclick="notify('Opening CodePen…')">
+        Visit <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="card" data-cat="explore">
+      <div class="card-tag">Explore</div>
+      <h2>NASA Imagery</h2>
+      <p>Real photos from space, satellites, and telescopes. The universe, open to the public.</p>
+      <a href="https://images.nasa.gov" target="_blank" data-tip="Open NASA" onclick="notify('Opening NASA Image Library…')">
+        Visit <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="card" data-cat="create">
+      <div class="card-tag">Create</div>
+      <h2>Coolors</h2>
+      <p>Generate beautiful color palettes in seconds. Essential tool for anyone who cares about color.</p>
+      <a href="https://coolors.co" target="_blank" data-tip="Open Coolors" onclick="notify('Opening Coolors…')">
+        Visit <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="card" data-cat="explore">
+      <div class="card-tag">Explore</div>
+      <h2>Archive.org</h2>
+      <p>The internet's memory. Browse the Wayback Machine or discover millions of free books and films.</p>
+      <a href="https://archive.org" target="_blank" data-tip="Open Archive" onclick="notify('Opening Internet Archive…')">
+        Visit <span class="arrow">→</span>
+      </a>
+    </div>
+
+  </div>
+
+  <div class="counter" id="counter">Showing <span id="count">6</span> of 6 links</div>
+
+  <div id="toast"></div>
+
+  <script>
+    let currentFilter = 'all';
+
+    function notify(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    function setFilter(cat, btn) {
+      currentFilter = cat;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilters();
+    }
+
+    function filterCards() { applyFilters(); }
+
+    function applyFilters() {
+      const query = document.getElementById('search').value.toLowerCase();
+      const cards = document.querySelectorAll('.card');
+      let visible = 0;
+
+      cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        const cat  = card.dataset.cat;
+        const matchCat  = currentFilter === 'all' || cat === currentFilter;
+        const matchText = text.includes(query);
+
+        if (matchCat && matchText) {
+          card.classList.remove('hidden');
+          visible++;
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+
+      document.getElementById('count').textContent = visible;
+      document.querySelector('.counter').innerHTML =
+        `Showing <span id="count">${visible}</span> of 6 links`;
+    }
+  </script>
+
+</body>
+</html>
