@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quantum Wave Function Tunneling</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+  <style>
+    :root { --bg: #0d0d0d; --ink: #f0ece4; --accent: #e8c14a; --muted: #5a5548; --card-bg: #161612; }
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: var(--ink); font-family: 'DM Mono', monospace; display: flex; overflow: hidden; }
+    .controls { width: 320px; height: 100%; background: var(--card-bg); border-right: 1px solid var(--muted); padding: 30px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; z-index: 2; overflow-y: auto; }
+    h3 { font-family: 'Playfair Display', serif; font-size: 1.4rem; margin: 0; color: var(--accent); }
+    p { font-size: 0.72rem; color: var(--muted); line-height: 1.5; margin: 0; }
+    .control-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink); }
+    input[type="range"] { -webkit-appearance: none; appearance: none; background: var(--muted); height: 2px; outline: none; margin: 8px 0; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 10px; height: 10px; background: var(--accent); cursor: pointer; border-radius: 50%; }
+    .action-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 10px; font-family: 'DM Mono', monospace; font-size: 0.7rem; text-transform: uppercase; cursor: pointer; transition: all 0.2s; margin-top: auto; }
+    .action-btn:hover { background: var(--accent); color: var(--bg); }
+    .canvas-container { flex-grow: 1; height: 100%; position: relative; background: #090909; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+    canvas { background: #020202; border: 1px solid rgba(90, 85, 72, 0.3); max-width: 100%; max-height: 100%; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <h3>TDSE Solver</h3>
+    <p>Solves the Time-Dependent Schrödinger Equation using a Leapfrog Finite-Difference grid schema.</p>
+    
+    <div class="control-group">
+      <label>Barrier Height (V₀): <span id="height-val">0.15</span> eV</label>
+      <input type="range" id="v0" min="0.0" max="0.4" step="0.01" value="0.15" oninput="updateBarrier()">
+    </div>
+    <div class="control-group">
+      <label>Barrier Width: <span id="width-val">40</span> px</label>
+      <input type="range" id="bWidth" min="10" max="120" step="2" value="40" oninput="updateBarrier()">
+    </div>
+    <div class="control-group">
+      <label>Initial Momentum (k₀): <span id="k-val">0.50</span></label>
+      <input type="range" id="momentum" min="0.2" max="0.9" step="0.05" value="0.50" onchange="initWavePacket()">
+    </div>
+    
+    <button class="action-btn" onclick="initWavePacket()">Re-Inject Wave Packet</button>
+  </div>
+  <div class="canvas-container"><canvas id="quantumCanvas" width="700" height="700"></canvas></div>
+
+  <script>
+    const canvas = document.getElementById('quantumCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 1D Space Grid Definition
+    const NX = 500; // Number of spatial points
+    let psiR = new Float64Array(NX); // Real part
+    let psiI = new Float64Array(NX); // Imaginary part
+    let V = new Float64Array(NX);    // Potential energy profile
+
+    // Physical Scaled Simulation Parameters (Dimensionless units where hbar = 1, m = 1)
+    const dt = 0.25; 
+    const dx = 1.0;  
+
+    function updateBarrier() {
+      const v0 = parseFloat(document.getElementById('v0').value);
+      const w = parseInt(document.getElementById('bWidth').value);
+      
+      document.getElementById('height-val').innerText = v0.toFixed(2);
+      document.getElementById('width-val').innerText = w;
+
+      // Construct a clean center potential barrier map
+      const center = Math.floor(NX * 0.65); // Placed forward in space
+      const halfW = Math.floor(w / 2);
+
+      for(let i = 0; i < NX; i++) {
+        if(i >= (center - halfW) && i <= (center + halfW)) {
+          V[i] = v0;
+        } else {
+          V[i] = 0.0;
+        }
+      }
+    }
+
+    function initWavePacket() {
+      const k0 = parseFloat(document.getElementById('momentum').value);
+      document.getElementById('k-val').innerText = k0.toFixed(2);
+
+      const x0 = NX * 0.15; // Start on the left quadrant
+      const sigma = 25.0;   // Spatial width of packet burst
+
+      for (let i = 0; i < NX; i++) {
+        // Gaussian distribution scaling envelope
+        let envelope = Math.exp(-Math.pow(i - x0, 2) / (2 * Math.pow(sigma, 2)));
+        let phase = k0 * i;
+        
+        psiR[i] = envelope * Math.cos(phase);
+        psiI[i] = envelope * Math.sin(phase);
+      }
+
+      // Zero-out boundaries to maintain normalization stability (Hard wall Dirichlet)
+      psiR[0] = psiR[NX-1] = 0;
+      psiI[0] = psiI[NX-1] = 0;
+    }
+
+    // Step the Quantum Leapfrog algorithm over space-time
+    function stepSchrodinger() {
+      // 1. Update Real parts based on Imaginary component curvature
+      for (let i = 1; i < NX - 1; i++) {
+        let laplacianI = (psiI[i+1] - 2 * psiI[i] + psiI[i-1]) / (dx * dx);
+        psiR[i] += dt * (-0.5 * laplacianI + V[i] * psiI[i]);
+      }
+      psiR[0] = psiR[NX-1] = 0; // Boundary clamp
+
+      // 2. Update Imaginary parts based on Real component curvature
+      for (let i = 1; i < NX - 1; i++) {
+        let laplacianR = (psiR[i+1] - 2 * psiR[i] + psiR[i-1]) / (dx * dx);
+        psiI[i] -= dt * (-0.5 * laplacianR + V[i] * psiR[i]);
+      }
+      psiI[0] = psiI[NX-1] = 0; // Boundary clamp
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const scaleX = canvas.width / NX;
+      const centerY = canvas.height / 2 + 50;
+
+      // Draw the Potential Barrier profile
+      ctx.fillStyle = 'rgba(90, 85, 72, 0.2)';
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      for(let i = 0; i < NX; i++) {
+        ctx.lineTo(i * scaleX, centerY - V[i] * 1200); // Scale potential visually
+      }
+      ctx.lineTo(canvas.width, centerY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw the baseline ground line
+      ctx.strokeStyle = 'rgba(90, 85, 72, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(canvas.width, centerY);
+      ctx.stroke();
+
+      // Render the calculated probability distribution density vector curve
+      ctx.beginPath();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#e8c14a'; // Accent color matching parent layout
+      
+      for (let i = 0; i < NX; i++) {
+        // P(x) = |Psi|^2
+        let probDensity = (psiR[i] * psiR[i]) + (psiI[i] * psiI[i]);
+        let plotY = centerY - (probDensity * 220); // Scale amplitude density dynamically
+
+        if (i === 0) ctx.moveTo(i * scaleX, plotY);
+        else ctx.lineTo(i * scaleX, plotY);
+      }
+      ctx.stroke();
+
+      // Draw standard metadata parameters onto screen grid workspace
+      ctx.fillStyle = 'rgba(240, 236, 228, 0.4)';
+      ctx.font = '11px DM Mono';
+      ctx.fillText("|Ψ(x,t)|² Probability Packet", 30, 40);
+    }
+
+    function loop() {
+      // Loop multiple computation intervals per frame redraw step for smooth motion speed
+      for(let step = 0; step < 8; step++) {
+        stepSchrodinger();
+      }
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    // Initialize environment states
+    updateBarrier();
+    initWavePacket();
+    loop();
+  </script>
+</body>
+</html>
