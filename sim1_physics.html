@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orbital Gravity Simulation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+  <style>
+    :root { --bg: #0d0d0d; --ink: #f0ece4; --accent: #e8c14a; --muted: #5a5548; --card-bg: #161612; }
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: var(--ink); font-family: 'DM Mono', monospace; display: flex; overflow: hidden; }
+    .controls { width: 320px; height: 100%; background: var(--card-bg); border-right: 1px solid var(--muted); padding: 30px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; z-index: 2; overflow-y: auto; }
+    h3 { font-family: 'Playfair Display', serif; font-size: 1.4rem; margin: 0; color: var(--accent); }
+    p { font-size: 0.72rem; color: var(--muted); line-height: 1.5; margin: 0; }
+    .control-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink); }
+    input[type="range"] { -webkit-appearance: none; appearance: none; background: var(--muted); height: 2px; outline: none; margin: 8px 0; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 10px; height: 10px; background: var(--accent); cursor: pointer; border-radius: 50%; }
+    
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .action-btn { background: transparent; border: 1px solid var(--muted); color: var(--ink); padding: 10px; font-family: 'DM Mono', monospace; font-size: 0.7rem; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+    .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .action-btn.primary { border-color: var(--accent); color: var(--accent); margin-top: auto;}
+    .action-btn.primary:hover { background: var(--accent); color: var(--bg); }
+    
+    .canvas-container { flex-grow: 1; height: 100%; position: relative; background: #090909; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+    canvas { background: #020202; border: 1px solid rgba(90, 85, 72, 0.3); max-width: 100%; max-height: 100%; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <h3>Gravity Vectors</h3>
+    <p>N-body interaction simulator. Tweak mass fields to bend spacetime mechanics.<br><br><strong>Navigation:</strong> Drag canvas area to Pan. Scroll mouse wheel to Zoom.</p>
+    
+    <div class="control-group">
+      <label>Central Star Mass: <span id="star-val">8000</span></label>
+      <input type="range" id="starMass" min="1000" max="25000" step="500" value="8000" oninput="updateStarMass()">
+    </div>
+
+    <div class="control-group">
+      <label>Gravitational Constant G: <span id="g-val">1.0</span></label>
+      <input type="range" id="gravity" min="0.1" max="5" step="0.1" value="1">
+    </div>
+    
+    <div class="control-group">
+      <label>Node Body Count: <span id="count-val">40</span></label>
+      <input type="range" id="nodes" min="1" max="100" step="1" value="40" onchange="initSimulation()">
+    </div>
+    
+    <div class="control-group">
+      <label>Orbiter Mass Max: <span id="mass-val">150</span></label>
+      <input type="range" id="mass" min="50" max="500" step="10" value="150">
+    </div>
+
+    <div class="btn-row">
+      <button class="action-btn" onclick="resetView()">Reset View</button>
+      <button class="action-btn" onclick="clearTrailsOnly()">Clear Trails</button>
+    </div>
+
+    <button class="action-btn primary" onclick="resetFieldAndCamera()">Reset Entire Field</button>
+  </div>
+  <div class="canvas-container"><canvas id="gravityCanvas" width="700" height="700"></canvas></div>
+
+  <script>
+    const canvas = document.getElementById('gravityCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let starRef = null;
+
+    // Interactive View Navigation Properties
+    let panX = 0;
+    let panY = 0;
+    let zoom = 1.0;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+
+    class Particle {
+      constructor(x, y, vx, vy, mass, isStar = false) {
+        this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+        this.mass = mass;
+        this.isStar = isStar;
+        this.updateRadius();
+      }
+      updateRadius() {
+        this.radius = this.isStar ? Math.max(6, Math.sqrt(this.mass) * 0.25) : Math.max(1.5, Math.sqrt(this.mass) * 0.4);
+      }
+      update() { this.x += this.vx; this.y += this.vy; }
+      draw() {
+        ctx.beginPath();
+        // Transforms incorporate camera center translation offsets and zoom metrics
+        const screenX = (this.x - panX) * zoom + canvas.width / 2;
+        const screenY = (this.y - panY) * zoom + canvas.height / 2;
+        
+        ctx.arc(screenX, screenY, this.radius * zoom, 0, Math.PI * 2);
+        ctx.fillStyle = this.isStar ? '#f0ece4' : '#e8c14a';
+        ctx.fill();
+      }
+    }
+
+    function updateStarMass() {
+      const massVal = parseFloat(document.getElementById('starMass').value);
+      document.getElementById('star-val').innerText = massVal;
+      if (starRef) {
+        starRef.mass = massVal;
+        starRef.updateRadius();
+      }
+    }
+
+    // Centering reset function
+    function resetView() {
+      panX = canvas.width / 2;
+      panY = canvas.height / 2;
+      zoom = 1.0;
+    }
+
+    function clearTrailsOnly() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+
+    function resetFieldAndCamera() {
+      resetView(); // Center camera position coordinates explicitly before populating elements
+      initSimulation();
+    }
+
+    function initSimulation() {
+      particles = [];
+      const count = parseInt(document.getElementById('nodes').value);
+      const starMassInput = parseFloat(document.getElementById('starMass').value);
+      document.getElementById('count-val').innerText = count;
+      document.getElementById('star-val').innerText = starMassInput;
+      
+      // Instantiate central heavy star directly onto grid space center coordinate points
+      starRef = new Particle(canvas.width / 2, canvas.height / 2, 0, 0, starMassInput, true);
+      particles.push(starRef);
+      
+      for(let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 100 + Math.random() * 200;
+        const x = canvas.width / 2 + Math.cos(angle) * radius;
+        const y = canvas.height / 2 + Math.sin(angle) * radius;
+        
+        const speed = Math.sqrt((0.015 * starMassInput) / radius);
+        const vx = -Math.sin(angle) * speed + (Math.random() - 0.5) * 0.1;
+        const vy = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.1;
+        const m = Math.random() * parseInt(document.getElementById('mass').value) + 10;
+        particles.push(new Particle(x, y, vx, vy, m, false));
+      }
+    }
+
+    // ── INTERACTIVE MOUSE NAVIGATION METHODS ──
+    canvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.clientX - panX * zoom;
+      startY = e.clientY - panY * zoom;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      panX = (e.clientX - startX) / zoom;
+      panY = (e.clientY - startY) / zoom;
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = 1.1;
+      if (e.deltaY < 0) {
+        zoom *= zoomFactor;
+      } else {
+        zoom /= zoomFactor;
+      }
+      zoom = Math.max(0.15, Math.min(zoom, 8.0));
+    }, { passive: false });
+
+
+    function loop() {
+      // Dynamic motion alpha trails overlay blur wipes
+      ctx.fillStyle = 'rgba(2,2,2,0.18)'; 
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      const G = parseFloat(document.getElementById('gravity').value);
+      document.getElementById('g-val').innerText = G.toFixed(1);
+      document.getElementById('mass-val').innerText = document.getElementById('mass').value;
+
+      // Gravity Loop Calculus Engine
+      for(let i = 0; i < particles.length; i++) {
+        for(let j = 0; j < particles.length; j++) {
+          if(i === j) continue;
+          let p1 = particles[i]; let p2 = particles[j];
+          let dx = p2.x - p1.x; let dy = p2.y - p1.y;
+          let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+          
+          if(dist < (p1.radius + p2.radius) * 0.5) continue; 
+          
+          let force = (G * p1.mass * p2.mass) / (dist * dist);
+          let ax = (force * (dx / dist)) / p1.mass;
+          let ay = (force * (dy / dist)) / p1.mass;
+          p1.vx += ax; p1.vy += ay;
+        }
+      }
+
+      // Step metrics positions across simulation space
+      particles.forEach(p => {
+        p.update();
+        p.draw();
+      });
+
+      // Overlay dynamic translation navigation layout grid lines mesh
+      ctx.strokeStyle = 'rgba(90, 85, 72, 0.05)';
+      ctx.lineWidth = 1;
+      const step = 50 * zoom;
+      const startGridX = ((-panX * zoom + canvas.width/2) % step);
+      const startGridY = ((-panY * zoom + canvas.height/2) % step);
+      
+      for(let x = startGridX; x < canvas.width; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for(let y = startGridY; y < canvas.height; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+      
+      // Real-time Telemetry Overlay Readouts
+      ctx.fillStyle = 'rgba(240, 236, 228, 0.3)';
+      ctx.font = '10px DM Mono';
+      ctx.fillText(`MAGNIFICATION: ${(zoom * 100).toFixed(0)}%  //  PAN_X: ${Math.floor(panX)} PAN_Y: ${Math.floor(panY)}`, 25, 40);
+
+      requestAnimationFrame(loop);
+    }
+    
+    // Set view layout initial coordinates grid parameters on structural initialization load
+    resetView();
+    initSimulation(); 
+    loop();
+  </script>
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simulation Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --ink: #f0ece4;
+      --accent: #e8c14a;
+      --muted: #5a5548;
+      --card-bg: #161612;
+      --hover-line: #e8c14a;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'DM Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 80px;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 64px;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 0.8s ease both;
+    }
+
+    header .eyebrow {
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.8rem, 7vw, 5.5rem);
+      font-weight: 900;
+      line-height: 1.05;
+      color: var(--ink);
+    }
+
+    header h1 span { color: var(--accent); }
+
+    header p {
+      margin-top: 20px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 48px;
+      position: relative;
+      z-index: 1;
+      animation: fadeUp 0.8s 0.2s ease both;
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--muted);
+      color: var(--muted);
+      padding: 6px 18px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 2px;
+    }
+    .filter-btn:hover, .filter-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(232,193,74,0.06);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 1000px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .card {
+      background: var(--card-bg);
+      padding: 32px 28px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.25s, background 0.25s;
+      animation: fadeUp 0.6s ease both;
+      cursor: pointer;
+      border: 1px solid rgba(90, 85, 72, 0.2);
+    }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 0; height: 2px;
+      background: var(--accent);
+      transition: width 0.35s ease;
+    }
+
+    .card:hover { background: #1a1a14; transform: translateY(-2px); }
+    .card:hover::after { width: 100%; }
+
+    .card-tag {
+      font-size: 0.62rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    .card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      line-height: 1.25;
+    }
+
+    .card p {
+      font-size: 0.76rem;
+      line-height: 1.7;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .card .launch-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--muted);
+      padding-bottom: 2px;
+      transition: color 0.2s, border-color 0.2s;
+      background: transparent;
+      border-top: none; border-left: none; border-right: none;
+      cursor: pointer;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .card:hover .launch-btn { color: var(--accent); border-color: var(--accent); }
+    .card .launch-btn .arrow { transition: transform 0.2s; display: inline-block; }
+    .card:hover .launch-btn .arrow { transform: translateX(4px); }
+
+    /* ── Seamless Sandbox Modal Viewport ── */
+    .sim-viewport {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .sim-viewport.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .viewport-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--muted);
+      background: var(--card-bg);
+    }
+    .viewport-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      color: var(--ink);
+    }
+    .close-btn {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 6px 14px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .close-btn:hover {
+      background: var(--accent);
+      color: var(--bg);
+    }
+    .iframe-wrapper {
+      flex-grow: 1;
+      width: 100%;
+      height: calc(100% - 70px);
+      background: #000;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* ── Utilities ── */
+    .counter {
+      text-align: center;
+      font-size: 0.68rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-top: 40px;
+      text-transform: uppercase;
+      position: relative;
+      z-index: 1;
+    }
+    .counter span { color: var(--accent); }
+    .card.hidden { display: none; }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="eyebrow">— System Registry —</div>
+    <h1>Interactive <span>Models</span></h1>
+    <p>Select a dynamic architecture below to initialize an active sandboxed execution environment.</p>
+  </header>
+
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="setFilter('all', this)">All Engines</button>
+    <button class="filter-btn" onclick="setFilter('physics', this)">Physics</button>
+    <button class="filter-btn" onclick="setFilter('biological', this)">Biological</button>
+    <button class="filter-btn" onclick="setFilter('mathematical', this)">Mathematical</button>
+    <button class="filter-btn" onclick="setFilter('materials', this)">Materials Engineering</button>
+  </div>
+
+  <div class="grid" id="grid">
+
+    <div class="card" data-cat="physics" onclick="launchSim('sim1_physics.html', 'Orbital Gravity Simulation')">
+      <div class="card-tag">Physics</div>
+      <h2>Orbital Gravity</h2>
+      <p>Interactive N-body gravity vectors. Modify planetary masses and watch system equilibriums decay.</p>
+      <button class="launch-btn">Initialize <span class="arrow">→</span></button>
+    </div>
+
+    <div class="card" data-cat="mathematical" onclick="launchSim('sim2_chaos.html', 'Attractor Chaos Model')">
+      <div class="card-tag">Mathematical</div>
+      <h2>Lorenz Attractor</h2>
+      <p>Plot deterministic chaos. Real-time rendering of variable shifts in non-linear mathematical fields.</p>
+      <button class="launch-btn">Initialize <span class="arrow">→</span></button>
+    </div>
+
+    <div class="card" data-cat="biological" onclick="launchSim('sim3_ecosystem.html', 'Predator-Prey Matrix')">
+      <div class="card-tag">Biological</div>
+      <h2>Ecosystem Balance</h2>
+      <p>Lotka-Volterra differential simulations managing resource scarcity, population peaks, and collapses.</p>
+      <button class="launch-btn">Initialize <span class="arrow">→</span></button>
+    </div>
+
+    <div class="card" data-cat="biological" onclick="launchSim('sim4_cellular.html', 'Conway Automata')">
+      <div class="card-tag">Biological</div>
+      <h2>Cellular Automata</h2>
+      <p>Infinite variations of Conway's Game of Life. Control genetic criteria rulesets and observe mutations.</p>
+      <button class="launch-btn">Initialize <span class="arrow">→</span></button>
+    </div>
+
+    <div class="card" data-cat="physics" onclick="launchSim('sim5_quantum.html', 'Wave Function Mechanics')">
+      <div class="card-tag">Physics</div>
+      <h2>Quantum Wave function</h2>
+      <p>Visualizing particle probability distributions and barrier tunneling calculations live.</p>
+      <button class="launch-btn">Initialize <span class="arrow">→</span></button>
+    </div>
+
+    <div class="card" data-cat="materials" onclick="launchSim('sim6_oxidation.html', 'Steel Oxidation Kinetics')">
+      <div class="card-tag">Materials Engineering</div>
+      <h2>Oxidation Kinetics</h2>
+      <p>Model high-temperature parabolic mass gain ($dW/dt$) on steel rebar using custom segmented temperature profiles.</p>
+      <button class="launch-btn">Initialize <span class="arrow">→</span></button>
+    </div>
+
+  </div>
+
+  <div class="counter" id="counter">Active Engines: <span id="count">6</span> of 6</div>
+
+  <div class="sim-viewport" id="viewport">
+    <div class="viewport-header">
+      <div class="viewport-title" id="v-title">Loading Simulation Framework...</div>
+      <button class="close-btn" onclick="closeSim()">Terminate Session ×</button>
+    </div>
+    <div class="iframe-wrapper">
+      <iframe id="sim-frame" src=""></iframe>
+    </div>
+  </div>
+
+  <script>
+    let currentFilter = 'all';
+
+    function launchSim(url, title) {
+      document.getElementById('v-title').textContent = title;
+      document.getElementById('sim-frame').src = url;
+      document.getElementById('viewport').classList.add('active');
+    }
+
+    function closeSim() {
+      document.getElementById('viewport').classList.remove('active');
+      document.getElementById('sim-frame').src = ""; // Unload frame memory
+    }
+
+    function setFilter(cat, btn) {
+      currentFilter = cat;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const cards = document.querySelectorAll('.card');
+      let visible = 0;
+
+      cards.forEach(card => {
+        const cat  = card.dataset.cat;
+        const matchCat  = currentFilter === 'all' || cat === currentFilter;
+
+        if (matchCat) {
+          card.classList.remove('hidden');
+          visible++;
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+
+      document.getElementById('count').textContent = visible;
+    }
+  </script>
+</body>
+</html>
